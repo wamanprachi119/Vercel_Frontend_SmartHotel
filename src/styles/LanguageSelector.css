@@ -1,0 +1,145 @@
+/* ─── LANGUAGE SELECTOR PAGE ──────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap');
+
+.lang-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.lang-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(15,12,41,0.82) 0%, rgba(230,92,0,0.45) 100%);
+  z-index: 0;
+}
+
+.lang-card {
+  position: relative;
+  z-index: 1;
+  background: rgba(255,255,255,0.97);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 44px 40px;
+  width: 400px;
+  max-width: 92vw;
+  text-align: center;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.3);
+}
+
+.lang-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #e65c00;
+  margin-bottom: 8px;
+}
+
+.lang-subtitle {
+  font-family: 'DM Sans', sans-serif;
+  color: #6b7280;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin: 0 0 28px;
+}
+
+/* Toggle Button */
+.lang-btn {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-size: 16px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  color: #374151;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.lang-btn:hover {
+  border-color: #e65c00;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+}
+
+/* Left side (icon + text) */
+.lang-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #374151;
+  font-weight: 500;
+}
+
+/* Dropdown box */
+.lang-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 8px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.12);
+  z-index: 20;
+}
+
+/* Dropdown options */
+.lang-dropdown button {
+  width: 100%;
+  padding: 13px 16px;
+  background: #ffffff;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 15px;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.lang-dropdown button:hover {
+  background: #fff7ed;
+  color: #e65c00;
+}
+
+.lang-footer {
+  font-size: 0.78rem;
+  color: #9ca3af;
+  margin-top: 20px;
+}
+
+/* Proceed Button */
+.lang-proceed-btn {
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px;
+  background: linear-gradient(135deg, #e65c00, #f9a825);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(230,92,0,0.35);
+  transition: opacity 0.18s;
+}
+
+.lang-proceed-btn:hover { opacity: 0.9; }
+.lang-proceed-btn:disabled { opacity: 0.45; cursor: not-allowed; }

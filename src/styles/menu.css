@@ -1,0 +1,53 @@
+/* ─── MENU BROWSER ───────────────────────────────────────── */
+.menu-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.menu-results-bar {
+  padding: 12px 0 16px;
+}
+
+.menu-results-text {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.menu-results-text strong {
+  color: #1a1a2e;
+  font-weight: 700;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 22px;
+}
+
+.no-items {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 60px 20px;
+  color: #9ca3af;
+}
+
+.no-items p {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.no-items span {
+  font-size: 0.9rem;
+}
+
+@media (max-width: 1100px) {
+  .menu-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+}
+
+@media (max-width: 600px) {
+  .menu-grid { grid-template-columns: 1fr; }
+}

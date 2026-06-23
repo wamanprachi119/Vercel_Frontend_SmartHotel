@@ -1,0 +1,122 @@
+/* ─── SIDEBAR ────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap');
+
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  width: 220px;
+  background: #1a1a2e;
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+  padding: 0 0 20px 0;
+}
+
+/* Brand */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 20px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  margin-bottom: 16px;
+}
+
+.brand-icon {
+  width: 22px;
+  height: 22px;
+  color: #e65c00;
+}
+
+.brand-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.1rem;
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Nav */
+.sidebar-nav {
+  padding: 0 12px;
+}
+
+.nav-section-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.3);
+  padding: 0 8px;
+  margin-bottom: 6px;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.sidebar-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  color: rgba(255,255,255,0.55);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.sidebar-item:hover {
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.9);
+}
+
+.sidebar-item.active {
+  background: linear-gradient(135deg, #e65c00, #f9a825);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(230, 92, 0, 0.35);
+}
+
+.sidebar-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.sidebar-label {
+  font-size: 0.9rem;
+}
+
+/* Footer */
+.sidebar-footer-info {
+  padding: 16px 20px 0;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+
+.sidebar-footer-text {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.2);
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* Mobile hide */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+}
+
+/* Kitchen section pushed to bottom */
+.sidebar-kitchen-section {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
