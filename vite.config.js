@@ -5,11 +5,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    strictPort: true,
     open: false,
     // Proxy API calls to .NET backend — avoids CORS issues in development
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'https://smarthotelbackendrender-production.up.railway.app',
         changeOrigin: true,
         secure: false,
       },

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { CheckCircle, Trash2, RefreshCw, Lock, LogOut, UserPlus, Eye, EyeOff, Users } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { CheckCircle, Trash2, RefreshCw, Lock, LogOut, UserPlus, Eye, EyeOff, Users, AlertCircle, X } from "lucide-react";
 import { getAllOrders, updateOrderStatus as apiUpdateStatus, deleteOrder as apiDeleteOrder } from "../services/api";
 import { useTranslation } from "../hooks/useTranslation";
 import "../styles/components.css";
@@ -11,8 +11,6 @@ const STAFF_CREDENTIALS = {
 };
 
 const ACTIVE_SESSIONS = {};
-
-// Staff session uses localStorage — this is fine (it's authentication state, not order data)
 const SESSION_KEY = "smarthotel_staff_session";
 const SESSION_TTL = 24 * 60 * 60 * 1000;
 
@@ -27,6 +25,34 @@ function loadSession() {
   } catch { return null; }
 }
 function clearSession() { localStorage.removeItem(SESSION_KEY); }
+
+// ── Inline toast notification (replaces alert()) ──────────────
+function Toast({ message, type = "error", onClose }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 4000);
+    return () => clearTimeout(t);
+  }, [onClose]);
+
+  const bg    = type === "error"   ? "#fef2f2" : type === "success" ? "#f0fdf4" : "#fffbeb";
+  const color = type === "error"   ? "#b91c1c" : type === "success" ? "#15803d" : "#92400e";
+  const border= type === "error"   ? "#fca5a5" : type === "success" ? "#86efac" : "#fde68a";
+
+  return (
+    <div style={{
+      position: "fixed", top: 18, right: 18, zIndex: 9999,
+      background: bg, color, border: `1.5px solid ${border}`,
+      borderRadius: 10, padding: "12px 18px", display: "flex",
+      alignItems: "center", gap: 10, boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
+      maxWidth: 380, fontSize: "0.9rem", fontWeight: 500,
+    }}>
+      <AlertCircle size={18} />
+      <span style={{ flex: 1 }}>{message}</span>
+      <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color, padding: 2 }}>
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
 
 function KitchenLogin({ onLogin }) {
   const [username, setUsername] = useState("");
@@ -94,20 +120,30 @@ export function KitchenDashboard({ language }) {
   const [newChefUser, setNewChefUser] = useState("");
   const [newChefPass, setNewChefPass] = useState("");
   const [chefMsg, setChefMsg]         = useState("");
+  const [toast, setToast]             = useState(null); // { message, type }
+  const [updatingIds, setUpdatingIds] = useState(new Set()); // track in-flight updates
+  const [backendOnline, setBackendOnline] = useState(true);
 
-  const loadOrders = async () => {
+  const showToast = useCallback((message, type = "error") => {
+    setToast({ message, type });
+  }, []);
+
+  const loadOrders = useCallback(async () => {
     try {
       const apiOrders = await getAllOrders();
       if (Array.isArray(apiOrders)) {
         const normalized = apiOrders.map((o) => ({
           ...o,
+          id: o.id || o.Id,
           timestamp: o.createdAt ? new Date(o.createdAt).getTime() : Date.now(),
         }));
         setOrders(normalized.sort((a, b) => b.timestamp - a.timestamp));
         setLastRefresh(new Date());
+        setBackendOnline(true);
       }
     } catch (err) {
       console.warn("[Kitchen] Failed to load orders from API:", err.message);
+      setBackendOnline(false);
       // Load from localStorage as fallback
       const localOrders = JSON.parse(localStorage.getItem("localOrders") || "[]");
       if (localOrders.length > 0) {
@@ -118,41 +154,87 @@ export function KitchenDashboard({ language }) {
         setOrders(normalized.sort((a, b) => b.timestamp - a.timestamp));
       }
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (!staff) return;
     loadOrders();
-    const interval = setInterval(loadOrders, 3000);
+    const interval = setInterval(loadOrders, 5000);
     return () => clearInterval(interval);
-  }, [staff]);
+  }, [staff, loadOrders]);
 
   const updateOrderStatus = async (orderId, status) => {
+    // Prevent double-click
+    if (updatingIds.has(orderId)) return;
+
+    // Local-only orders: just update localStorage + state
+    if (String(orderId).startsWith("ORD-LOCAL-")) {
+      const stored = JSON.parse(localStorage.getItem("localOrders") || "[]");
+      const updated = stored.map((o) => o.id === orderId ? { ...o, status } : o);
+      localStorage.setItem("localOrders", JSON.stringify(updated));
+      setOrders((prev) =>
+        prev.map((o) => o.id === orderId ? { ...o, status } : o)
+      );
+      return;
+    }
+
+    setUpdatingIds((prev) => new Set(prev).add(orderId));
+
+    // Optimistically update UI immediately
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? { ...o, status, lastUpdatedBy: staff.username, lastUpdatedRole: staff.label }
+          : o
+      )
+    );
+
     try {
       await apiUpdateStatus(orderId, status);
-      // Optimistically update UI
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.id === orderId
-            ? { ...o, status, lastUpdatedBy: staff.username, lastUpdatedRole: staff.label }
-            : o
-        )
-      );
+      // Success — state already updated optimistically, nothing more to do
     } catch (err) {
       console.error("[Kitchen] Status update failed:", err.message);
-      alert("Failed to update order status. Please check your connection.");
+      // Revert the optimistic update
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId ? { ...o, status: o._prevStatus || o.status } : o
+        )
+      );
+      // Show inline toast instead of alert()
+      if (err.message.includes("timed out") || err.message.includes("fetch")) {
+        showToast("Cannot reach server. Is the backend running on port 5000?", "error");
+      } else {
+        showToast(`Failed to update order #${String(orderId).slice(-8)}: ${err.message}`, "error");
+      }
+      // Reload to get actual state from server
+      setTimeout(loadOrders, 500);
+    } finally {
+      setUpdatingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(orderId);
+        return next;
+      });
     }
   };
 
   const deleteOrder = async (orderId) => {
     if (staff?.role !== "manager") return;
+
+    // Remove from UI immediately
+    setOrders((prev) => prev.filter((o) => o.id !== orderId));
+
+    // Local-only orders: just update localStorage
+    if (String(orderId).startsWith("ORD-LOCAL-")) {
+      const stored = JSON.parse(localStorage.getItem("localOrders") || "[]");
+      localStorage.setItem("localOrders", JSON.stringify(stored.filter((o) => o.id !== orderId)));
+      return;
+    }
+
     try {
       await apiDeleteOrder(orderId);
-      setOrders((prev) => prev.filter((o) => o.id !== orderId));
     } catch (err) {
       console.error("[Kitchen] Delete failed:", err.message);
-      // If delete API doesn't exist yet, just remove from local state
-      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+      // Already removed from UI — silently ignore
     }
   };
 
@@ -178,28 +260,12 @@ export function KitchenDashboard({ language }) {
 
   const getTimeSince = (ts) => {
     const totalSeconds = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-
-    // 0–59 seconds → show seconds
-    if (totalSeconds < 60) {
-      return totalSeconds <= 1 ? "Just now" : `${totalSeconds} sec ago`;
-    }
-
+    if (totalSeconds < 60) return totalSeconds <= 1 ? "Just now" : `${totalSeconds} sec ago`;
     const totalMinutes = Math.floor(totalSeconds / 60);
-
-    // 1–59 minutes → show minutes
-    if (totalMinutes < 60) {
-      return `${totalMinutes} min ago`;
-    }
-
+    if (totalMinutes < 60) return `${totalMinutes} min ago`;
     const totalHours = Math.floor(totalMinutes / 60);
     const remMinutes = totalMinutes % 60;
-
-    // 60+ minutes, under 24 hours → convert to hours (with minutes if any)
-    if (totalHours < 24) {
-      return remMinutes > 0 ? `${totalHours} hr ${remMinutes} min ago` : `${totalHours} hr ago`;
-    }
-
-    // 24+ hours → convert to days
+    if (totalHours < 24) return remMinutes > 0 ? `${totalHours} hr ${remMinutes} min ago` : `${totalHours} hr ago`;
     const totalDays = Math.floor(totalHours / 24);
     return totalDays === 1 ? "1 day ago" : `${totalDays} days ago`;
   };
@@ -208,7 +274,7 @@ export function KitchenDashboard({ language }) {
     pending:   { label: t("markAsAccepted"),  next: "accepted",  cls: "btn-blue"   },
     accepted:  { label: t("markAsPreparing"), next: "preparing", cls: "btn-orange" },
     preparing: { label: t("markAsReady"),     next: "ready",     cls: "btn-green"  },
-    ready:     { label: t("markAsServed") + " ✓", next: "served",    cls: "btn-gray"   },
+    ready:     { label: t("markAsServed") + " ✓", next: "served", cls: "btn-gray" },
   };
 
   const paymentBadge = (order) => {
@@ -220,6 +286,30 @@ export function KitchenDashboard({ language }) {
 
   return (
     <div className="kitchen-wrapper">
+      {/* Toast notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
+      {/* Backend offline warning */}
+      {!backendOnline && (
+        <div style={{
+          background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 8,
+          padding: "10px 16px", marginBottom: 12, fontSize: "0.85rem",
+          color: "#92400e", display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <AlertCircle size={16} />
+          <span>
+            ⚠️ Backend server not reachable. Showing cached orders.
+            Start the .NET backend on port 5000 and refresh.
+          </span>
+        </div>
+      )}
+
       <div className="kitchen-header">
         <div>
           <h2 className="kitchen-title">🍳 {t("kitchenDashboard")}</h2>
@@ -285,8 +375,8 @@ export function KitchenDashboard({ language }) {
       {/* Stats */}
       <div className="kitchen-stats">
         {[
-          { label: t("allOrders"),    value: orders.length,                                    color: "#6366f1" },
-          { label: t("activeOrders"), value: activeOrders.length,                              color: "#f59e0b" },
+          { label: t("allOrders"),    value: orders.length,                                         color: "#6366f1" },
+          { label: t("activeOrders"), value: activeOrders.length,                                   color: "#f59e0b" },
           { label: t("preparing"),    value: orders.filter((o) => o.status === "preparing").length, color: "#3b82f6" },
           { label: t("paid"),         value: orders.filter((o) => o.paymentStatus === "completed" || o.status === "paid").length, color: "#10b981" },
         ].map((stat) => (
@@ -322,9 +412,13 @@ export function KitchenDashboard({ language }) {
             <tbody>
               {activeOrders.map((order) => {
                 const btn = nextStatus[order.status];
+                const isUpdating = updatingIds.has(order.id);
                 return (
                   <tr key={order.id}>
-                    <td className="order-id-cell">#{order.id.slice(-8)}</td>
+                    <td className="order-id-cell">
+                      #{String(order.id).slice(-8)}
+                      {order.isLocal && <span style={{ fontSize: "0.65rem", color: "#f59e0b", marginLeft: 4 }}>(local)</span>}
+                    </td>
                     <td><span className="table-badge">{order.tableNumber || "—"}</span></td>
                     <td>
                       <div className="items-list">
@@ -343,9 +437,13 @@ export function KitchenDashboard({ language }) {
                     <td className="time-cell">{getTimeSince(order.timestamp)}</td>
                     <td>
                       {btn && (
-                        <button className={`action-btn ${btn.cls}`}
-                          onClick={() => updateOrderStatus(order.id, btn.next)}>
-                          {btn.label}
+                        <button
+                          className={`action-btn ${btn.cls}`}
+                          onClick={() => updateOrderStatus(order.id, btn.next)}
+                          disabled={isUpdating}
+                          style={{ opacity: isUpdating ? 0.6 : 1 }}
+                        >
+                          {isUpdating ? "..." : btn.label}
                         </button>
                       )}
                     </td>
@@ -384,7 +482,7 @@ export function KitchenDashboard({ language }) {
               <tbody>
                 {completedOrders.slice(-10).reverse().map((order) => (
                   <tr key={order.id} className="completed-row">
-                    <td className="order-id-cell">#{order.id.slice(-8)}</td>
+                    <td className="order-id-cell">#{String(order.id).slice(-8)}</td>
                     <td><span className="table-badge">{order.tableNumber || "—"}</span></td>
                     <td>{order.items?.length} item(s)</td>
                     <td>₹{order.total?.toFixed(0)}</td>

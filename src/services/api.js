@@ -1,19 +1,39 @@
 // ── Smart Hotel API Configuration ─────────────────────────────
 export const BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000";
+  import.meta.env.VITE_API_URL || "";
 
-async function request(method, path, body) {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || err.message || `HTTP ${res.status}`);
+// ── Request helper with timeout ───────────────────────────────
+async function request(method, path, body, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      let err = {};
+      try { err = await res.json(); } catch { /* ignore */ }
+      throw new Error(err.error || err.message || `HTTP ${res.status}`);
+    }
+
+    if (res.status === 204) return null;
+
+    const text = await res.text();
+    if (!text.trim()) return null;
+
+    try { return JSON.parse(text); } catch { return text; }
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === "AbortError") throw new Error("Request timed out");
+    throw err;
   }
-  if (res.status === 204) return null;
-  return await res.json();
 }
 
 // ─── Orders ──────────────────────────────────────────────────
@@ -113,8 +133,6 @@ export async function clearCart(sessionId) {
 export async function placeOrder(tableNumber, cart, sessionId) {
   try {
     const order = await createOrder(tableNumber, cart);
-    // FIX: clear the server-side cart now that the order has been placed,
-    // so previously-ordered items never resurface in the cart on reload.
     if (sessionId) {
       try { await clearCart(sessionId); } catch { /* non-fatal */ }
     }
@@ -128,7 +146,6 @@ export async function placeOrder(tableNumber, cart, sessionId) {
       tableNumber,
     };
   } catch (err) {
-    // ── Offline fallback: create order locally ──
     console.warn("API unavailable, using local order fallback:", err.message);
     const orderId = "ORD-LOCAL-" + Date.now();
     const total = cart.reduce((s, i) => s + i.price * i.quantity, 0);
@@ -152,11 +169,9 @@ export async function placeOrder(tableNumber, cart, sessionId) {
       createdAt: new Date().toISOString(),
       isLocal: true,
     };
-    // Persist locally
     const stored = JSON.parse(localStorage.getItem("localOrders") || "[]");
     stored.push(localOrder);
     localStorage.setItem("localOrders", JSON.stringify(stored));
-    // Also clear server-side cart in the offline/local-fallback path, if reachable
     if (sessionId) {
       try { await clearCart(sessionId); } catch { /* non-fatal */ }
     }
@@ -180,7 +195,6 @@ export async function savePayment(paymentData) {
       wallet:        paymentData.wallet,
     });
   } catch {
-    // Offline fallback
     const localPayment = {
       id: "PAY-LOCAL-" + Date.now(),
       ...paymentData,
@@ -199,7 +213,6 @@ export async function submitFeedback(feedbackData) {
   try {
     return await createFeedback(feedbackData);
   } catch {
-    // Offline fallback — silently save locally
     const stored = JSON.parse(localStorage.getItem("localFeedback") || "[]");
     stored.push({ ...feedbackData, createdAt: new Date().toISOString(), isLocal: true });
     localStorage.setItem("localFeedback", JSON.stringify(stored));
@@ -222,16 +235,10 @@ export async function getNotifications() {
 }
 
 // ─── Language Preference ──────────────────────────────────────
-/**
- * Save the user's language selection to the database.
- * Called when the user clicks "Continue" on the Language Selection page.
- * Fails silently — sessionStorage/localStorage is the source of truth if API is down.
- */
 export async function saveLanguagePreference(sessionId, languageCode) {
   try {
     return await request("POST", "/api/language-preference", { sessionId, languageCode });
   } catch {
-    // API unavailable — language already saved in sessionStorage/localStorage
     return { saved: false, isLocal: true };
   }
 }
